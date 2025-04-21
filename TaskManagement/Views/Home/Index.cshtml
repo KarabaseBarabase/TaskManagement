@@ -1,82 +1,394 @@
 ﻿@model List<TaskManagement.Models.Mission>
 
 @{
-    ViewData["Title"] = "Scheduler";
+    ViewData["Title"] = "Weekly Scheduler";
     var staff = Model.Select(m => m.AssignedTo).Distinct().ToArray();
-    
-    var staffColors = new Dictionary<string, string>();
+
+    // Генерация цветов для задач
     var random = new Random();
-    foreach (var person in staff)
+    var colors = new Dictionary<string, string>();
+    foreach (var mission in Model)
     {
-        string color = String.Format("#{0:X6}", random.Next(0x1000000)); 
-        staffColors[person] = color;
+        if (!colors.ContainsKey(mission.Name))
+        {
+            string color = $"hsl({random.Next(0, 360)}, 70%, 80%)";
+            colors[mission.Name] = color;
+        }
     }
-    DateTime currentDate = new DateTime(2025, 03, 25);
-    int startHour = 8;  
-    int endHour = 19;    
+
+    // Настройки отображения
+    DateTime startDate = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek); // Начало текущей недели
+    DateTime endDate = startDate.AddDays(6); // Конец недели
+    int startHour = 8; // Начало рабочего дня
+    int endHour = 19;  // Конец рабочего дня
 }
 
-<div class="container" style="font-family: Arial, sans-serif;">
-    <div class="bg-light p-3 mb-3 border-bottom">
-        Добро пожаловать! <a href="#">Войти</a>
-    </div>
+<div class="container" style="font-family: Arial, sans-serif; max-width: 1200px;">
+    <div class="header-section">
+        <div class="welcome-message">
+            Добро пожаловать! <a href="#">Войти</a>
+        </div>
 
-    <div class="mb-3">
-        <button type="button" class="btn btn-outline-secondary">Неделя</button>
-        <button type="button" class="btn btn-outline-secondary">Месяц</button>
-        <button type="button" class="btn btn-secondary">Сотрудники</button>
-        <span>@currentDate.ToString("dd MMM yyyy")</span>
-        <span class="float-right">
-            <a href="#">Сегодня</a>
-            <a href="#">&lt;</a>
-            <a href="#">&gt;</a>
-        </span>
-    </div>
+        <div class="controls">
+            <div class="view-options">
+                <button type="button" class="btn btn-outline-secondary">День</button>
+                <button type="button" class="btn btn-outline-secondary">Неделя</button>
+                <button type="button" class="btn btn-outline-secondary">Месяц</button>
+            </div>
 
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Time</th>
-                @foreach (var person in staff)
-                {
-                    <th class="text-center">@person</th>
-                }
-            </tr>
-        </thead>
-        <tbody>
+            <div class="date-navigation">
+                <button class="btn btn-link" onclick="changeWeek(-1)">&lt;</button>
+                <span class="current-week">@startDate.ToString("dd MMM yyyy") - @endDate.ToString("dd MMM yyyy")</span>
+                <button class="btn btn-link" onclick="changeWeek(1)">&gt;</button>
+                <button class="btn btn-outline-primary" onclick="goToToday()">Сегодня</button>
+                <button type="button" class="btn btn-outline-primary" onclick="loadTasks()">Обновить</button>
+            </div>
+
+            <div class="staff-selector">
+                <select id="staffSelect" class="form-control" onchange="loadTasks()">
+                    <option value="">Выберите сотрудника</option>
+                    @foreach (var person in staff)
+                    {
+                        <option value="@person">@person</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="schedule-wrapper">
+        <div class="schedule-container">
+        <div class="time-column">
+                <div class="time-header"></div>
             @for (int hour = startHour; hour <= endHour; hour++)
             {
-                <tr>
-                    <th class="text-center align-middle">@hour:00</th>
-                    @for (int staffIndex = 0; staffIndex < staff.Length; staffIndex++)
-                    {
-                        <td class="position-relative" style="height: 80px; vertical-align: top; position: relative">
-                            @{
-                                var missionsForThisCell = Model.Where (m => m.CreatedDate.Year == currentDate.Year &&
-                                    m.CreatedDate.Month == currentDate.Month &&
-                                    m.CreatedDate.Day == currentDate.Day &&
-                                    m.CreatedDate.Hour == hour &&
-                                    m.AssignedTo.Contains(staff[staffIndex]));
-                                foreach (var mission in missionsForThisCell)
-                                {
-                                    string backgroundColor = staffColors[mission.AssignedTo];
-                                    string textColor = "black";
-
-                                    var topOffset = (mission.CreatedDate.Minute / 60.0) * 80; 
-                                    var height = (mission.Duration / 60.0) * 80; 
-                                    var missionTime = mission.CreatedDate.ToString("HH:mm");
-
-                                    <div class="position-absolute p-1" style="top: @topOffset px; left: 0; width: 100%; height: @height px; background-color: @backgroundColor; color: @textColor; box-sizing: border-box; font-size: smaller;">
-                                        @missionTime - @(Convert.ToDateTime(missionTime).AddMinutes(mission.Duration).ToString("HH:mm"))
-                                        <br />
-                                        @mission.Name
-                                    </div>
-                                }
-                            }
-                        </td>
-                    }
-                </tr>
+                <div class="time-slot">@hour:00</div>
             }
-        </tbody>
-    </table>
+        </div>
+
+        <div class="week-grid">
+            @for (int day = 0; day < 7; day++)
+            {
+                var currentDay = startDate.AddDays(day);
+                <div class="day-column @(currentDay.Date == DateTime.Today.Date ? "today" : "")">
+                    <div class="day-header">
+                        <div class="day-name">@currentDay.ToString("ddd")</div>
+                        <div class="day-date">@currentDay.Day</div>
+                    </div>
+
+                    @for (int hour = startHour; hour <= endHour; hour++)
+                    {
+                        <div class="hour-slot" data-day="@day" data-hour="@hour"></div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="tasks-layer" id="tasksContainer">
+        </div>
+     </div>
+    </div>
 </div>
+
+<style>
+    .header-section {
+        margin-bottom: 20px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 15px;
+    }
+
+    .welcome-message {
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+    }
+
+    .controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .view-options .btn {
+        margin-right: 5px;
+    }
+
+    .date-navigation {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .current-week {
+        font-weight: bold;
+        min-width: 200px;
+        text-align: center;
+    }
+
+    .staff-selector {
+        min-width: 250px;
+    }
+
+    .schedule-wrapper {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 200px);
+        overflow: hidden;
+    }
+
+    .schedule-container {
+        display: flex;
+        position: relative;
+        flex-grow: 1;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .time-column {
+        width: 60px;
+        flex-shrink: 0;
+        background-color: #f8f9fa;
+    }
+
+    .time-slot {
+        height: 60px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        padding: 5px;
+        font-size: 12px;
+        color: #666;
+        border-bottom: 1px solid #eee;
+    }
+
+    .time-header {
+        height: 50px; 
+        border-bottom: 1px solid #eee;
+        background-color: #f8f9fa;
+    }
+
+    .week-grid {
+        display: flex;
+        flex-grow: 1;
+    }
+
+    .day-column {
+        flex: 1;
+        min-width: 0;
+        border-right: 1px solid #eee;
+    }
+
+        .day-column.today {
+            background-color: #f8f9fa;
+        }
+
+    .day-header {
+        text-align: center;
+        padding: 5px;
+        border-bottom: 1px solid #eee;
+        background-color: #f8f9fa;
+        height: 50px;
+    }
+
+    .day-name {
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .day-date {
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .hour-slot {
+        height: 60px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .tasks-layer {
+        position: absolute;
+        top: 50px;
+        left: 0px;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+    }
+
+    .task-block {
+        position: absolute;
+        padding: 4px;
+        border-radius: 4px;
+        border-left: 3px solid rgba(0,0,0,0.2);
+        font-size: 12px;
+        overflow: hidden;
+        pointer-events: auto;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+        .task-block:hover {
+            z-index: 100;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+    .task-time {
+        font-weight: bold;
+        margin-bottom: 2px;
+    }
+
+    .task-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        // Текущая дата начала недели
+        let currentWeekStart = new Date('@startDate.ToString("yyyy-MM-dd")');
+
+        // Объект с цветами задач
+        const taskColors = {
+        @foreach (var color in colors)
+        {
+            @Html.Raw($"'{color.Key}': '{color.Value}',")
+        }
+                };
+
+        // Функция для изменения недели
+        function changeWeek(weeks) {
+            currentWeekStart.setDate(currentWeekStart.getDate() + weeks * 7);
+            updateWeekDisplay();
+            loadTasks();
+        }
+
+        // Функция для перехода на текущую неделю
+        function goToToday() {
+            currentWeekStart = new Date();
+            currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+            updateWeekDisplay();
+            loadTasks();
+        }
+
+        // Обновление отображения дат недели
+        function updateWeekDisplay() {
+            const endDate = new Date(currentWeekStart);
+            endDate.setDate(endDate.getDate() + 6);
+
+            const options = { day: 'numeric', month: 'short', year: 'numeric' };
+            const startStr = currentWeekStart.toLocaleDateString('ru-RU', options);
+            const endStr = endDate.toLocaleDateString('ru-RU', options);
+
+            document.querySelector('.current-week').textContent = `${startStr} - ${endStr}`;
+
+            // Обновляем класс today для дней
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            document.querySelectorAll('.day-column').forEach((col, index) => {
+                const dayDate = new Date(currentWeekStart);
+                dayDate.setDate(dayDate.getDate() + index);
+
+                if (dayDate.getTime() === today.getTime()) {
+                    col.classList.add('today');
+                } else {
+                    col.classList.remove('today');
+                }
+
+                // Обновляем дату в заголовке
+                const dayName = dayDate.toLocaleDateString('ru-RU', { weekday: 'short' });
+                const dayNumber = dayDate.getDate();
+                col.querySelector('.day-name').textContent = dayName;
+                col.querySelector('.day-date').textContent = dayNumber;
+            });
+        }
+
+        // Загрузка задач для выбранного сотрудника
+        function loadTasks() {
+            const staffSelect = document.getElementById('staffSelect');
+            const selectedStaff = staffSelect.value;
+
+            if (!selectedStaff) {
+                document.getElementById('tasksContainer').innerHTML = '';
+                return;
+            }
+
+            // Фильтруем задачи по выбранному сотруднику и текущей неделе
+            const tasks = [
+                @foreach (var mission in Model)
+                {
+                <text>
+                    {
+                        id: '@mission.TaskID',
+                    name: '@Html.Raw(mission.Name.Replace("'", "\\'"))',
+                    assignedTo: '@Html.Raw(mission.AssignedTo)',
+                    startTime: new Date('@mission.CreatedDate.ToString("yyyy-MM-ddTHH:mm:ss")'),
+                    duration: @mission.Duration,
+                    color: taskColors['@Html.Raw(mission.Name.Replace("'", "\\'"))']
+                                },
+                </text>
+        }
+                    ].filter(task => {
+                        //console.log("task: ", task.name, task.assignedTo, task.startTime, "staff: ", selectedStaff, "curWeek: ", currentWeekStart, "startTime< ", new Date(currentWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000));
+                        return task.assignedTo === selectedStaff &&
+                            task.startTime >= currentWeekStart &&
+                            task.startTime < new Date(currentWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    }
+                );
+            console.log("task:", tasks);
+            renderTasks(tasks);
+        }
+
+        // Отрисовка задач на сетке
+        function renderTasks(tasks) {
+            const container = document.getElementById('tasksContainer');
+            container.innerHTML = '';
+
+            const timeColumnWidth = 60;
+            const dayColumnWidth = (container.parentElement.clientWidth - timeColumnWidth) / 7;
+            const hourHeight = 60;
+
+            tasks.forEach(task => {
+                const dayOfWeek = (task.startTime.getDay() + 6) % 7; // Пн=0, Вс=6
+                const startMinutes = task.startTime.getHours() * 60 + task.startTime.getMinutes();
+                const durationMinutes = task.duration;
+
+                const top = (startMinutes - @startHour * 60) * hourHeight / 60;
+                const height = durationMinutes * hourHeight / 40;
+                const left = timeColumnWidth + (dayOfWeek+1) * dayColumnWidth;
+                const width = dayColumnWidth - 2;
+                console.log("height: ", height, "left: ", left);
+                const endTime = new Date(task.startTime.getTime() + task.duration * 60000);
+                const timeStr = `${task.startTime.getHours().toString().padStart(2, '0')}:${task.startTime.getMinutes().toString().padStart(2, '0')} - ${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`;
+
+                const taskElement = document.createElement('div');
+                taskElement.className = 'task-block';
+                taskElement.style.cssText = `
+                            top: ${top}px;
+                            left: ${left}px;
+                            width: ${width}px;
+                            height: ${height}px;
+                            background-color: ${task.color};
+                        `;
+
+                taskElement.innerHTML = `
+                            <div class="task-time">${timeStr}</div>
+                            <div class="task-name">${task.name}</div>
+                        `;
+
+                container.appendChild(taskElement);
+            });
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('staffSelect').addEventListener('change', loadTasks);
+            updateWeekDisplay();
+        });
+    </script>
+}
