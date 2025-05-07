@@ -1,26 +1,13 @@
-﻿@model List<TaskManagement.Models.Mission>
+﻿@model WeeklyManagerViewModel
 
 @{
     ViewData["Title"] = "Weekly Scheduler";
-    var staff = Model.Select(m => m.AssignedTo).Distinct().ToArray();
-
-    // Генерация цветов для задач
-    var random = new Random();
-    var colors = new Dictionary<string, string>();
-    foreach (var mission in Model)
-    {
-        if (!colors.ContainsKey(mission.Name))
-        {
-            string color = $"hsl({random.Next(0, 360)}, 70%, 80%)";
-            colors[mission.Name] = color;
-        }
-    }
-
-    // Настройки отображения
-    DateTime startDate = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek); // Начало текущей недели
-    DateTime endDate = startDate.AddDays(6); // Конец недели
-    int startHour = 8; // Начало рабочего дня
-    int endHour = 19;  // Конец рабочего дня
+    var staff = Model.Staff;
+    var colors = Model.TaskColors;
+    var startDate = Model.StartDate;
+    var endDate = Model.EndDate;
+    var startHour = Model.StartHour;
+    var endHour = Model.EndHour;
 }
 
 <div class="container" style="font-family: Arial, sans-serif; max-width: 1200px;">
@@ -320,7 +307,7 @@
 
             // Фильтруем задачи по выбранному сотруднику и текущей неделе
             const tasks = [
-                @foreach (var mission in Model)
+                @foreach (var mission in Model.Missions)
                 {
                 <text>
                     {
